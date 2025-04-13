@@ -4,3 +4,6 @@ speechrecognition
 langchain
 faiss-cpu
 pydub
+langchain_community
+PyPDF2
+google.generativeai
