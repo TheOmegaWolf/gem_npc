@@ -1,0 +1,6 @@
+streamlit
+google-generativeai
+speechrecognition
+langchain
+faiss-cpu
+pydub

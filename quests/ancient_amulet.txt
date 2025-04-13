@@ -1,0 +1,7 @@
+Find the Ancient Amulet
+A powerful amulet is hidden somewhere in these lands. Collect the three magical stones to reveal its location.
+3
+Find the First Magical Stone|Wise Owl|Underground Lake|First Magical Stone
+Find the Second Magical Stone|Forest Spirit|Ancient Ruins|Second Magical Stone
+Find the Third Magical Stone|Village Elder|Dragon's Lair|Third Magical Stone
+Ancient Amulet|You gained the power to speak with animals!
