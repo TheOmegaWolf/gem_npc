@@ -1,13 +1,9 @@
-# Adventure Game with LLM NPCs and Voice Interaction
+# === Adventure Game with LLM NPCs and Voice Interaction ===
 import streamlit as st
 import random
 import speech_recognition as sr
 import requests
 import google.generativeai as genai
-from langchain.agents import initialize_agent, Tool, AgentType
-from langchain.prompts import PromptTemplate
-from langchain.chains import ConversationChain
-from langchain_community.llms.huggingface_hub import HuggingFaceHub
 from langchain.vectorstores import FAISS
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
@@ -16,7 +12,7 @@ import os
 
 # === API KEYS ===
 GEMINI_API_KEY = "AIzaSyDDVJ75w6vj3x8HpbEVK22lKUUlHYmJd10"
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = "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"
 
 # === Game State ===
 if "location" not in st.session_state:
@@ -60,13 +56,9 @@ def listen():
 
 # === Handle Text-Based Conversations ===
 def handle_text_input(user_input):
-    if st.session_state.npc in st.session_state.npc_embeddings:
-        npc_profile = st.session_state.npc_embeddings[st.session_state.npc]
-    else:
-        npc_profile = npc_profiles[st.session_state.npc]
-
+    npc_profile = st.session_state.npc_embeddings.get(st.session_state.npc, npc_profiles.get(st.session_state.npc, ""))
     full_prompt = f"{npc_profile}\nThe player is in {st.session_state.location} and says: {user_input}\nRespond as the NPC:"
-    
+
     if st.session_state.model_choice == "Gemini":
         return chat_with_gemini(full_prompt)
     else:
@@ -86,7 +78,6 @@ def chat_with_mistral(prompt, history=[]):
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
     }
-    
     messages = [{"role": "system", "content": "You are a helpful and immersive RPG NPC."}]
     for u, a in history:
         messages.append({"role": "user", "content": u})
@@ -105,41 +96,38 @@ def chat_with_mistral(prompt, history=[]):
     else:
         return "⚠️ LLM Error: " + response.text
 
-# === Upload and Process NPC Document ===
-def extract_text_from_pdf(file_path):
-    reader = PdfReader(file_path)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
+# === File Processing ===
+def extract_text_from_pdf(file):
+    reader = PdfReader(file)
+    return "\n".join(page.extract_text() for page in reader.pages)
 
-def process_uploaded_npc(file):
-    # Assuming file is either PDF or text
-    npc_name = file.name.split('.')[0]
-    if file.type == 'application/pdf':
+def process_uploaded_file(file):
+    filename = file.name
+    text = ""
+    if file.type == "application/pdf":
         text = extract_text_from_pdf(file)
-    elif file.type == 'text/plain':
+    elif file.type == "text/plain":
         text = str(file.read(), 'utf-8')
     else:
         st.error("Only PDF or text files are supported.")
-        return None
-    
-    # Split the NPC profile into chunks and create embeddings
-    text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = text_splitter.split_text(text)
-    embeddings = OpenAIEmbeddings()
-    npc_vectors = FAISS.from_texts(chunks, embeddings)
-    
-    st.session_state.npc_embeddings[npc_name] = text  # Store the raw text for the NPC
-    st.session_state.npc_embeddings[f"{npc_name}_vector"] = npc_vectors  # Store FAISS vectors
-    
-    st.success(f"🗣️ {npc_name} has been added! You can now talk with them.")
+        return
 
-# === Display NPC Upload Section ===
-def npc_upload_section():
-    uploaded_file = st.file_uploader("Upload an NPC document (PDF/Text)", type=["pdf", "txt"])
-    if uploaded_file:
-        process_uploaded_npc(uploaded_file)
+    # Handle NPC Upload
+    if filename.startswith("npc_"):
+        npc_name = filename.split("_")[1].split(".")[0]
+        st.session_state.npc_embeddings[npc_name] = text
+        text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        chunks = text_splitter.split_text(text)
+        embeddings = OpenAIEmbeddings()
+        vector_store = FAISS.from_texts(chunks, embeddings)
+        st.session_state.npc_embeddings[f"{npc_name}_vector"] = vector_store
+        st.success(f"🧙‍♂️ NPC '{npc_name}' added to the game!")
+    
+    # Handle Quest Upload
+    elif filename.startswith("quest_"):
+        quest_name = filename.split("_")[1].split(".")[0].replace("_", " ")
+        st.session_state.quest[quest_name] = "Not Started"
+        st.success(f"🗺️ Quest '{quest_name}' added to your log!")
 
 # === Location and NPC Management ===
 def change_location(new_location):
@@ -168,7 +156,7 @@ def display_game_ui():
     st.markdown(f"## 🤖 You meet {st.session_state.npc} in the {st.session_state.location}")
 
     text_input = st.text_input("💬 Type your message")
-    
+
     if st.button("📤 Send Text"):
         if text_input:
             npc_reply = handle_text_input(text_input)
@@ -208,7 +196,11 @@ def main():
     st.sidebar.markdown("## 🤖 Choose LLM")
     st.session_state.model_choice = st.sidebar.radio("Model", ["Mistral", "Gemini"])
 
-    npc_upload_section()
+    st.sidebar.markdown("## ⬆️ Upload NPC/Quest")
+    uploaded_file = st.sidebar.file_uploader("Upload (start filename with 'npc_' or 'quest_')", type=["pdf", "txt"])
+    if uploaded_file:
+        process_uploaded_file(uploaded_file)
+
     display_game_ui()
 
 # Run the Game
